@@ -1,0 +1,24 @@
+{
+  "name": "sonic-riders-controller",
+  "version": "1.0.0",
+  "description": "Using a skateboard as a game controller",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dasilvacontin/sonic-riders-controller.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dasilvacontin/sonic-riders-controller/issues"
+  },
+  "homepage": "https://github.com/dasilvacontin/sonic-riders-controller#readme",
+  "dependencies": {
+    "express": "^4.17.1",
+    "robot-js": "github:p120ph37/robot-js#prebuilt",
+    "socket.io": "^4.1.2"
+  }
+}

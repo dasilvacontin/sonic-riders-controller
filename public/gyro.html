@@ -1,0 +1,170 @@
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <script src="/js/socket.io.js"></script>
+  <style>
+    html, body {
+      padding: 0;
+      margin: 0;
+      overflow: hidden;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    @font-face {
+      font-family: TeenyTinyPixls;
+      src: url(TeenyTinyPixls.ttf);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="myCanvas"></canvas>
+  <script>
+    const log = []
+    let lastAlpha = 0
+    let lastBeta = 0
+    let lastGamma = 0
+    const serverURL = 'https://172.20.10.14:3000'
+    let socket = null
+
+    const canvas = document.getElementById('myCanvas')
+    const ctx = canvas.getContext('2d')
+
+    let offscreen1 = document.createElement('canvas')
+    let offscreen2 = document.createElement('canvas')
+    let ctxOffscreen1 = offscreen1.getContext('2d')
+    let ctxOffscreen2 = offscreen2.getContext('2d')
+
+    window.onresize = function () {
+      offscreen1.width = offscreen2.width = canvas.width = window.innerWidth * 2
+      offscreen1.height = offscreen2.height = canvas.height = window.innerHeight * 2
+      canvas.style.width = offscreen1.style.width = offscreen2.style.width = `${window.innerWidth}px`
+      canvas.style.height = offscreen1.style.height = offscreen2.style.height = `${window.innerHeight}px`
+      ctx.scale(2, 2)
+      ctxOffscreen1.scale(2, 2)
+      ctxOffscreen2.scale(2, 2)
+    }
+    window.onresize()
+
+    function addToLog (msg) {
+      log.push(msg.toUpperCase())
+      render()
+    }
+    addToLog('tap to proceed')
+
+    function onClick() {
+      socket = io(serverURL)
+      addToLog(`connecting to ${serverURL}`)
+
+      socket.on('connect', function () {
+        addToLog(`connected to ${serverURL}`)
+      })
+
+      socket.on('disconnect', function () {
+        addToLog(`disconnected from ${serverURL}`)
+      })
+
+      // feature detect
+      try {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          addToLog(`requesting deviceorientationevent permission`)
+          DeviceOrientationEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              window.addEventListener('deviceorientation', handleOrientation, true)
+              addToLog(`deviceorientationevent permission granted`)
+            }
+          })
+          .catch(function (e) {
+            addToLog(e.message)
+            console.error(e.message)
+          });
+        } else {
+          // handle regular non iOS 13+ devices
+        }
+      } catch (e) {
+        addToLog(e.message)
+      }
+
+      document.body.onclick = null
+    }
+    document.body.onclick = onClick
+
+    function handleOrientation (event) {
+      const alpha = event.alpha.toFixed(2);
+      const beta = event.beta.toFixed(2);
+      const gamma = event.gamma.toFixed(2);
+      lastAlpha = alpha
+      lastBeta = beta
+      lastGamma = gamma
+      addToLog(`alpha ${alpha}; beta ${beta}; gamma ${gamma};`)
+
+      socket.emit('gyro', { alpha, beta, gamma })
+    }
+
+    function render () {
+      // clear screen
+      ctx.fillStyle = 'black'
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight)
+
+      // paint log
+      ctx.fillStyle = 'white'
+      ctx.font = '10px TeenyTinyPixls'
+      for (let i = 0; i < window.innerHeight / 12 + 1; ++i) {
+        const message = log[log.length - i - 1]
+        if (message == null) break;
+        ctx.fillText(message, 0, i * 12 - 2 + 12)
+      }
+
+      // paint lines
+      let x = Math.floor(window.innerWidth / 2)
+      let y = Math.floor(window.innerHeight / 2)
+      ctx.fillRect(x, 0, 2, window.innerHeight) 
+      ctx.fillRect(0, y, window.innerWidth, 2) 
+
+      // paint circle
+      // assume offscreen1 is the one with the last frame
+      ctxOffscreen2.clearRect(0, 0, window.innerWidth, window.innerHeight)
+
+      // paint old frame with lower opacity
+      ctxOffscreen2.globalAlpha = 0.95
+      ctxOffscreen2.drawImage(offscreen1, 0, 0, window.innerWidth, window.innerHeight)
+      ctxOffscreen2.globalAlpha = 1
+
+      if (socket) {
+        // paint new circle
+        ctxOffscreen2.fillStyle = 'magenta'
+        ctxOffscreen2.beginPath()
+        ctxOffscreen2.arc(
+          (lastGamma/90 + 1)/2 * window.innerWidth,
+          (lastBeta/90 + 1)/2 * window.innerHeight,
+          56/2,
+          0,
+          2 * Math.PI
+        )
+        ctxOffscreen2.closePath()
+        ctxOffscreen2.fill()
+
+        // paint offscreen 2 into main canvas
+        ctx.drawImage(offscreen2, 0, 0, window.innerWidth, window.innerHeight)
+
+        // swap offscreen 1 with offscreen 2 so that last good frame remains
+        // at offescreen 1
+        const tempOffscreen = offscreen1
+        const tempCtx = ctxOffscreen1
+        offscreen1 = offscreen2
+        ctxOffscreen1 = ctxOffscreen2
+        offscreen2 = tempOffscreen
+        ctxOffscreen2 = tempCtx
+      }
+    }
+    function mainLoop () {
+      requestAnimationFrame(mainLoop)
+      render()
+    }
+    mainLoop()
+  </script>
+</body>
